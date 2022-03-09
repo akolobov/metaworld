@@ -50,13 +50,17 @@ class SawyerNutAssemblyEnvV2(SawyerXYZEnv):
             reward_grab,
             reward_ready,
             reward_success,
-            success
+            success,
+            lifted,
+            aligned
         ) = self.compute_reward(action, obs)
 
         info = {
             'success': float(success),
             'near_object': reward_ready,
-            'grasp_success': reward_grab >= 0.5,
+            'grasp_success': reward_grab >= 0.5 or lifted,
+            'lift_success': lifted,
+            'align_success': aligned,
             'grasp_reward': reward_grab,
             'in_place_reward': reward_success,
             'obj_to_target': 0,
@@ -116,8 +120,13 @@ class SawyerNutAssemblyEnvV2(SawyerXYZEnv):
         radius = np.linalg.norm(pos_error[:2])
 
         aligned = radius < 0.02
+        #print(f'Target pos: {target_pos}')
+        #print(f'Wrench center: {wrench_center}')
         hooked = pos_error[2] > 0.0
         success = aligned and hooked
+
+        #print(f'Aligned: {aligned}')
+        #print(f'Hooked: {hooked}')
 
         # Target height is a 3D funnel centered on the peg.
         # use the success flag to widen the bottleneck once the agent
@@ -134,6 +143,9 @@ class SawyerNutAssemblyEnvV2(SawyerXYZEnv):
         a = 0.1  # Relative importance of just *trying* to lift the wrench
         b = 0.9  # Relative importance of placing the wrench on the peg
         lifted = wrench_center[2] > 0.02 or radius < threshold
+
+        #print(f'Lifted: {lifted}')
+
         in_place = a * float(lifted) + b * reward_utils.tolerance(
             np.linalg.norm(pos_error * scale),
             bounds=(0, 0.02),
@@ -141,7 +153,7 @@ class SawyerNutAssemblyEnvV2(SawyerXYZEnv):
             sigmoid='long_tail',
         )
 
-        return in_place, success
+        return in_place, success, lifted, aligned
 
     def compute_reward(self, actions, obs):
         hand = obs[:3]
@@ -167,7 +179,7 @@ class SawyerNutAssemblyEnvV2(SawyerXYZEnv):
             xz_thresh=0.01,
             medium_density=True,
         )
-        reward_in_place, success = SawyerNutAssemblyEnvV2._reward_pos(
+        reward_in_place, success, lifted, aligned = SawyerNutAssemblyEnvV2._reward_pos(
             wrench_center,
             self._target_pos
         )
@@ -183,4 +195,6 @@ class SawyerNutAssemblyEnvV2(SawyerXYZEnv):
             reward_quat,
             reward_in_place,
             success,
+            lifted, 
+            aligned
         )

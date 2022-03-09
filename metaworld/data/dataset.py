@@ -2,9 +2,16 @@ import h5py
 import pickle
 import numpy as np
 
+
+SUBGOAL_REWARD_COEFFICIENTS = {
+    'assembly-v2' : [1, 5, 10, 30]
+}
+
+
 SUBGOAL_BREAKDOWN = {
     'assembly-v2' : ['grasp_success', 'lift_success', 'align_success']
 }
+
 
 class MWDatasetWriter:
     def __init__(self, fname, env, task_name, res, camera, success_steps_for_termination):
