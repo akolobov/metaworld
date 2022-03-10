@@ -59,14 +59,9 @@ target_tasks = ['assembly-v2']
 
 for case in test_cases_latest_nonoise:
     
-    if case[0] not in target_tasks: #!= 'assembly-v2':
+    if case[0] not in target_tasks:
         continue
     
-    """
-    if case[0][-3:] != '-v2':
-        continue
-    """
-
     task_name = case[0]
     policy = case[1]
 
@@ -85,9 +80,10 @@ for case in test_cases_latest_nonoise:
     env.set_task(task)  # Set task
     config_env(env)
     num_successes = 0
-    num_attemps = 2 
+    num_attemps = 1 
 
-    data_writer = MWDatasetWriter(task_name + '.h5py', env, task_name, res, camera, MAX_steps_at_goal)
+    data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '.h5py')
+    data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, MAX_steps_at_goal)
 
     for attempt in range(num_attemps):
         print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
@@ -98,10 +94,11 @@ for case in test_cases_latest_nonoise:
         success_recorded =  False
         
         t = 0
+
         for t in range(env.max_path_length):
             action = policy.get_action(state)
             new_state, reward, done, info = env.step(action)
-            data_writer.append_data(state, obs, action, reward, done, info) #self, s, o, a, r, done, info)
+            data_writer.append_data(state, obs, action, reward, done, info)
             #print(f"Step {t} |||| near-object-rew: {info['near_object']}, grasp-rew: {info['grasp_reward']}, grasp-succ: {info['grasp_success']}, lift-succ: {info['lift_success']}, align-succ: {info['align_success']}, in-place-rew: {info['in_place_reward']}, obj-to-target-rew: {info['obj_to_target']}, success: {info['success']}")
             state = new_state
             obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
@@ -124,3 +121,6 @@ for case in test_cases_latest_nonoise:
 
     data_writer.close()
     print(f'Success rate for {task_name}: {num_successes / num_attemps}\n')
+
+
+    qlearning_dataset(data_file_path)
