@@ -1,7 +1,7 @@
 import h5py
 import pickle
 import numpy as np
-
+import time
 
 SUBGOAL_REWARD_COEFFICIENTS = {
     'assembly-v2' : [1, 5, 10, 30]
@@ -80,10 +80,12 @@ class MWDatasetWriter:
             np_data[k] = data
 
         trajectory = self._datafile.create_group('traj_' + str(self._num_episodes))
-        self._num_episodes += 1
 
         for k in np_data:
             trajectory.create_dataset(k, data=np_data[k], compression=compression)
+        
+        self._num_episodes += 1
+        self.data = self._reset_data()
 
     def close(self):
         self._datafile.close()
@@ -111,6 +113,8 @@ def qlearning_dataset(dataset_path):
 
         if traj == 'env_metadata':
             continue
+
+        print(f'Processing trajectory {traj}')
 
         state_ = []
         next_state_ = []
@@ -140,7 +144,7 @@ def qlearning_dataset(dataset_path):
             action_.append(action)
             reward_.append(reward)
             done_.append(done_bool)
-        
+
         """
         When the data was recorded, the agent had to spend at least env_metadata['success_steps_for_termination']
         consecutive steps at the goal for the trajectory to be considered successful, so successful trajectories 

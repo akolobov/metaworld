@@ -80,9 +80,10 @@ for case in test_cases_latest_nonoise:
     env.set_task(task)  # Set task
     config_env(env)
     num_successes = 0
-    num_attemps = 1 
+    num_attemps = 10
 
     data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '.h5py')
+    
     data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, MAX_steps_at_goal)
 
     for attempt in range(num_attemps):
@@ -121,6 +122,6 @@ for case in test_cases_latest_nonoise:
 
     data_writer.close()
     print(f'Success rate for {task_name}: {num_successes / num_attemps}\n')
-
-
+    
+    # Check the created dataset
     qlearning_dataset(data_file_path)
