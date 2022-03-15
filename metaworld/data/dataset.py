@@ -27,7 +27,7 @@ class MWDatasetWriter:
             'img_height' : res[1],
             #'img_format' : 'cwh',
             'camera' : camera,
-            'subgoal_breakdown' : SUBGOAL_BREAKDOWN[task_name], 
+            'subgoal_breakdown' : SUBGOAL_BREAKDOWN[task_name],
             'success_steps_for_termination' : success_steps_for_termination
         }
 
@@ -37,7 +37,7 @@ class MWDatasetWriter:
 
         self.data = self._reset_data()
         self._num_episodes = 0
-        
+
 
     def _reset_data(self):
         data = {
@@ -48,10 +48,10 @@ class MWDatasetWriter:
             'rewards': [],
             'infos/goal': []
             }
-        
+
         for subgoal in SUBGOAL_BREAKDOWN[self.task_name]:
             data['infos/' + subgoal] = []
-        
+
         return data
 
 
@@ -83,7 +83,7 @@ class MWDatasetWriter:
 
         for k in np_data:
             trajectory.create_dataset(k, data=np_data[k], compression=compression)
-        
+
         self._num_episodes += 1
         self.data = self._reset_data()
 
@@ -91,15 +91,21 @@ class MWDatasetWriter:
         self._datafile.close()
 
 
-def qlearning_dataset(dataset_path):
+def qlearning_dataset(dataset_path, reward_type):
     data = h5py.File(dataset_path, "r")
     env_metadata = pickle.loads(data['env_metadata'][()].tostring())
 
     # Retrieve the subgoal info for the task whose data was loaded
     subgoals = ['infos/' + key for key in (SUBGOAL_BREAKDOWN[env_metadata["task_name"]] + ['goal'])]
-    subgoal_coeffs = np.asarray(SUBGOAL_REWARD_COEFFICIENTS[env_metadata["task_name"]])
-    assert len(subgoals) == len(subgoal_coeffs), "The number of subgoals, including the goal, and subgoal coefficients must be the same"
-    
+    if reward_type=='shaped':
+        subgoal_coeffs = np.asarray(SUBGOAL_REWARD_COEFFICIENTS[env_metadata["task_name"]])
+        assert len(subgoals) == len(subgoal_coeffs), "The number of subgoals, including the goal, and subgoal coefficients must be the same"
+    elif reward_type=='sparse':
+        subgoal_coeffs = np.zeros_like(subgoals, dtype=np.float32)
+        subgoal_coeffs[-1] = 1.0
+    else:
+        raise NotImplementedError
+
     all_states = []
     all_next_states = []
     all_obs = []
@@ -147,7 +153,7 @@ def qlearning_dataset(dataset_path):
 
         """
         When the data was recorded, the agent had to spend at least env_metadata['success_steps_for_termination']
-        consecutive steps at the goal for the trajectory to be considered successful, so successful trajectories 
+        consecutive steps at the goal for the trajectory to be considered successful, so successful trajectories
         have env_metadata['success_steps_for_termination'] near-duplicate timesteps at the end. Below, we'll get
         rid of all but 1 of them.
         """
@@ -166,7 +172,7 @@ def qlearning_dataset(dataset_path):
             reward_ = reward_[: -env_metadata['success_steps_for_termination'] + 1]
             done_ = done_[: -env_metadata['success_steps_for_termination'] + 1]
             done_[-1] = True
-        
+
         all_states.extend(state_)
         all_next_states.extend(next_state_)
         all_obs.extend(obs_)
@@ -177,7 +183,7 @@ def qlearning_dataset(dataset_path):
 
     return {
         'states': np.array(all_states),
-        'next_states': np.array(all_next_states), 
+        'next_states': np.array(all_next_states),
         'observations': np.array(all_obs),
         'next_observations': np.array(all_next_obs),
         'actions': np.array(all_actions),
