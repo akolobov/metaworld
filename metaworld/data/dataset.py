@@ -101,8 +101,9 @@ def qlearning_dataset(dataset_path, reward_type):
         subgoal_coeffs = np.asarray(SUBGOAL_REWARD_COEFFICIENTS[env_metadata["task_name"]])
         assert len(subgoals) == len(subgoal_coeffs), "The number of subgoals, including the goal, and subgoal coefficients must be the same"
     elif reward_type=='sparse':
-        subgoal_coeffs = np.zeros_like(subgoals, dtype=np.float32)
-        subgoal_coeffs[-1] = 1.0
+        subgoal_coeffs_shaped = np.asarray(SUBGOAL_REWARD_COEFFICIENTS[env_metadata["task_name"]])
+        subgoal_coeffs = np.zeros_like(subgoal_coeffs_shaped, dtype=np.float32)
+        subgoal_coeffs[-1] = subgoal_coeffs_shaped.max()
     else:
         raise NotImplementedError
 
