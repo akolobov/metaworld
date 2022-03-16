@@ -76,11 +76,13 @@ for case in test_cases_latest_nonoise:
 
     ml1 = metaworld.ML1(task_name) # Construct the benchmark, sampling tasks
     env = ml1.train_classes[task_name]()  # Create a **training** goal distribution environment
+    """
     task = random.choice(ml1.train_tasks)
     env.set_task(task)  # Set task
     config_env(env)
+    """
     num_successes = 0
-    num_attemps = 10
+    num_attemps = 100
 
     data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '.h5py')
     
@@ -89,6 +91,11 @@ for case in test_cases_latest_nonoise:
     for attempt in range(num_attemps):
         print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
         writer = writer_for(task_name + '-' + str(attempt + 1), env.metadata['video.frames_per_second'], res)
+        
+        task = random.choice(ml1.train_tasks)
+        env.set_task(task)  # Set task
+        config_env(env)
+        
         state = env.reset()
         obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
         writer.write(obs)
@@ -103,6 +110,7 @@ for case in test_cases_latest_nonoise:
             #print(f"Step {t} |||| near-object-rew: {info['near_object']}, grasp-rew: {info['grasp_reward']}, grasp-succ: {info['grasp_success']}, lift-succ: {info['lift_success']}, align-succ: {info['align_success']}, in-place-rew: {info['in_place_reward']}, obj-to-target-rew: {info['obj_to_target']}, success: {info['success']}")
             state = new_state
             obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
+            #obs = env.sim.render(*res, mode='window', camera_name=camera)
             writer.write(obs)
             
             # TODO: record fixed-length trajectories? Or only until success? 
