@@ -2,6 +2,7 @@ import h5py
 import pickle
 import numpy as np
 import time
+from flatten_dict import flatten
 
 SUBGOAL_REWARD_COEFFICIENTS = {
     'assembly-v2' : [1, 5, 10, 30]
@@ -11,6 +12,34 @@ SUBGOAL_REWARD_COEFFICIENTS = {
 SUBGOAL_BREAKDOWN = {
     'assembly-v2' : ['grasp_success', 'lift_success', 'align_success']
 }
+
+
+DTYPES = {
+    'states': np.float64,
+    'observations': np.uint8,
+    'actions': np.float64,
+    'terminals': np.bool_,
+    'rewards': np.float64,
+    'infos': np.bool_
+}
+
+
+def target_type(data_name):
+    mod_data_name = data_name
+
+    if data_name not in DTYPES and data_name.startswith('infos'):
+        mod_data_name = 'infos'
+
+    return DTYPES[mod_data_name]
+
+
+def verify_type(data_name, dtype):
+    mod_data_name = data_name
+
+    if data_name not in DTYPES and data_name.startswith('infos'):
+        mod_data_name = 'infos'
+
+    assert DTYPES[mod_data_name] == dtype, f'{data_name}\'s np.array data type is {dtype}, but should be {DTYPES[mod_data_name]}'
 
 
 class MWDatasetWriter:
@@ -64,17 +93,14 @@ class MWDatasetWriter:
         self.data['infos/goal'].append(info['success'])
 
         for subgoal in SUBGOAL_BREAKDOWN[self.task_name]:
-            self.data['infos/' + subgoal].append(float(info[subgoal]))
+            self.data['infos/' + subgoal].append(info[subgoal])
 
 
     def write_trajectory(self, max_size=None, compression='gzip'):
         np_data = {}
         for k in self.data:
-            if k == 'terminals':
-                dtype = np.bool_
-            else:
-                dtype = np.float32
-            data = np.array(self.data[k], dtype=dtype)
+            data = np.array(self.data[k], dtype=target_type(k))
+
             if max_size is not None:
                 data = data[:max_size]
             np_data[k] = data
@@ -130,19 +156,24 @@ def qlearning_dataset(dataset_path, reward_type):
         action_ = []
         reward_ = []
         done_ = []
-        dataset = data[traj]
+        dataset = flatten(data[traj], reducer='path')
         N = dataset['rewards'].shape[0]
 
+        if N > 0:
+            for k in dataset:
+                verify_type(k, dataset[k][0].dtype)
+
         for i in range(N-1):
-            state = dataset['states'][i].astype(np.float32)
-            new_state = dataset['states'][i+1].astype(np.float32)
-            obs = dataset['observations'][i].astype(np.uint)
-            new_obs = dataset['observations'][i+1].astype(np.uint)
-            action = dataset['actions'][i].astype(np.float32)
+            time_start_typecast = time.time()
+            state = dataset['states'][i]
+            new_state = dataset['states'][i+1]
+            obs = dataset['observations'][i]
+            new_obs = dataset['observations'][i+1]
+            action = dataset['actions'][i]
             subgoals_achieved = np.asarray([dataset[subgoal][i] for subgoal in subgoals], dtype=np.float32)
             #TODO: decide whether subgoal rewards should always be *summed*. E.g., what if one subgoal implies another?
             reward = np.dot(subgoal_coeffs, subgoals_achieved)
-            done_bool = dataset['terminals'][i].astype(np.bool)
+            done_bool = dataset['terminals'][i]
 
             state_.append(state)
             next_state_.append(new_state)
@@ -181,6 +212,7 @@ def qlearning_dataset(dataset_path, reward_type):
         all_actions.extend(action_)
         all_rewards.extend(reward_)
         all_dones.extend(done_)
+
 
     return {
         'states': np.array(all_states),

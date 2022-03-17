@@ -82,7 +82,7 @@ for case in test_cases_latest_nonoise:
     config_env(env)
     """
     num_successes = 0
-    num_attemps = 100
+    num_attemps = 3 #100
 
     data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '.h5py')
     
@@ -132,4 +132,4 @@ for case in test_cases_latest_nonoise:
     print(f'Success rate for {task_name}: {num_successes / num_attemps}\n')
     
     # Check the created dataset
-    qlearning_dataset(data_file_path)
+    qlearning_dataset(data_file_path,reward_type='sparse')
