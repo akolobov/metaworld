@@ -35,6 +35,32 @@ class MetaWorldEnv:
         """
 
 
+import gym
+class MWReset(gym.Wrapper):
+    def __init__(self, env, train_tasks):
+        super().__init__(env)
+        self._train_tasks = train_tasks
+
+    def reset(self):
+        task = self._train_tasks[np.random.randint(len(self._train_tasks))]
+        self.env.set_task(task)
+        return self.env.reset()
+
+class MWSparseReward(gym.Wrapper):
+    def step(self, action):
+        observation, reward, done, info = super().step(action)
+        if 'success' in info:
+            reward = info['success']
+        return observation, reward, done, info
+
+def wrap_mw_env(env, train_tasks, sparse_reward: bool):
+    # Wrap the environment to return done when time limit is reached and randomly sample a task variation at reset
+    env = gym.wrappers.TimeLimit(env, env.max_path_length)
+    env = MWReset(env, train_tasks)
+    if sparse_reward:
+        env = MWSparseReward(env)
+    return env
+
 class Benchmark(abc.ABC):
     """A Benchmark.
 
@@ -64,6 +90,11 @@ class Benchmark(abc.ABC):
         """Get all of the test tasks for this benchmark."""
         return self._test_tasks
 
+    def create_train_env(self, env_name, sparse_reward=False):
+        return wrap_mw_env(self.train_classes[env_name](), self.train_tasks, sparse_reward)
+
+    def create_test_env(self, env_name):
+        return wrap_mw_env(self.test_classes[env_name](), self.test_tasks, sparse_reward)
 
 _ML_OVERRIDE = dict(partially_observable=True)
 _MT_OVERRIDE = dict(partially_observable=False)

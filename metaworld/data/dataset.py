@@ -131,7 +131,7 @@ def qlearning_dataset(dataset_path, reward_type):
 
     # Retrieve the subgoal info for the task whose data was loaded
     subgoals = ['infos/' + key for key in (SUBGOAL_BREAKDOWN[env_metadata["task_name"]] + ['goal'])]
-    if reward_type=='supgoal':
+    if reward_type=='subgoal':
         subgoal_coeffs = np.asarray(SUBGOAL_REWARD_COEFFICIENTS[env_metadata["task_name"]])
         assert len(subgoals) == len(subgoal_coeffs), "The number of subgoals, including the goal, and subgoal coefficients must be the same"
     elif reward_type=='sparse':
@@ -181,9 +181,14 @@ def qlearning_dataset(dataset_path, reward_type):
             new_obs = dataset['observations'][i+1]
             action = dataset['actions'][i]
             check_action(action, act_lim)
-            subgoals_achieved = np.asarray([dataset[subgoal][i] for subgoal in subgoals], dtype=np.float32)
             #TODO: decide whether subgoal rewards should always be *summed*. E.g., what if one subgoal implies another?
-            reward = np.dot(subgoal_coeffs, subgoals_achieved)
+            if reward_type=='shaped':
+                reward =  dataset['rewards'][i]
+            elif reward_type in ['sparse', 'subgoal']:
+                subgoals_achieved = np.asarray([dataset[subgoal][i] for subgoal in subgoals], dtype=np.float32)
+                reward = np.dot(subgoal_coeffs, subgoals_achieved)
+            else:
+                raise NotImplementedError()
             done_bool = dataset['terminals'][i]
 
             state_.append(state)

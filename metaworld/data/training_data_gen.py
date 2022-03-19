@@ -50,8 +50,10 @@ def config_env(e):
 
 
 res = (84, 84)
-camera = 'corner' # one of ['corner', 'topview', 'behindGripper', 'gripperPOV']
+camera = 'corner' # one of ['topview', 'corner', 'corner2', 'corner3', 'behindGripper', 'gripperPOV']
 MAX_steps_at_goal = 10
+act_tolerance = 1e-5
+lim = 1 - act_tolerance
 
 #print(metaworld.ML1.ENV_NAMES)  # Check out the available environments
 
@@ -84,12 +86,12 @@ for case in test_cases_latest_nonoise:
     num_successes = 0
     num_attemps = 3 #100
 
+    print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
+
     data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '.h5py')
-    
-    data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, MAX_steps_at_goal)
+    data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, act_tolerance, MAX_steps_at_goal)
 
     for attempt in range(num_attemps):
-        print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
         writer = writer_for(task_name + '-' + str(attempt + 1), env.metadata['video.frames_per_second'], res)
         
         task = random.choice(ml1.train_tasks)
@@ -105,6 +107,8 @@ for case in test_cases_latest_nonoise:
 
         for t in range(env.max_path_length):
             action = policy.get_action(state)
+            # Clip the action
+            action = np.clip(action, -lim, lim)
             new_state, reward, done, info = env.step(action)
             data_writer.append_data(state, obs, action, reward, done, info)
             #print(f"Step {t} |||| near-object-rew: {info['near_object']}, grasp-rew: {info['grasp_reward']}, grasp-succ: {info['grasp_success']}, lift-succ: {info['lift_success']}, align-succ: {info['align_success']}, in-place-rew: {info['in_place_reward']}, obj-to-target-rew: {info['obj_to_target']}, success: {info['success']}")
@@ -116,7 +120,7 @@ for case in test_cases_latest_nonoise:
             # TODO: record fixed-length trajectories? Or only until success? 
 
             if info['success'] and steps_at_goal >= MAX_steps_at_goal:
-                print(f'Attempt {attempt} succeeded at step {t}')
+                print(f'Attempt {attempt + 1} succeeded at step {t}')
                 num_successes += 1
                 success_recorded = True
                 break
@@ -125,11 +129,14 @@ for case in test_cases_latest_nonoise:
             else:
                 steps_at_goal = 0
 
+        if not success_recorded:
+            print(f'Attempt {attempt + 1} ended unsuccessfully at time step {t}')
+
         data_writer.write_trajectory()
-        print(f'Episode ended at time step {t}')
+
 
     data_writer.close()
     print(f'Success rate for {task_name}: {num_successes / num_attemps}\n')
     
     # Check the created dataset
-    qlearning_dataset(data_file_path,reward_type='sparse')
+    qlearning_dataset(data_file_path, reward_type='sparse')
