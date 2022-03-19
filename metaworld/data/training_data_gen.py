@@ -7,6 +7,7 @@ from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
 from metaworld.policies import *
 from tests.metaworld.envs.mujoco.sawyer_xyz.test_scripted_policies import test_cases_latest_nonoise
 from metaworld.data.dataset import *
+from datetime import datetime
 import gym
 
 # Suppress float conversion warnings 
@@ -84,11 +85,14 @@ for case in test_cases_latest_nonoise:
     config_env(env)
     """
     num_successes = 0
-    num_attemps = 3 #100
+    num_attemps = 300
 
     print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
 
-    data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '.h5py')
+    dt = datetime.now() 
+    #str_date_time = dt.strftime("%d-%m-%Y-%H:%M:%S")
+    #print(str_date_time)
+    data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '_' + str(num_attemps) + '-traj_' + dt.strftime("%d-%m-%Y-%H.%M.%S") + '.h5py')
     data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, act_tolerance, MAX_steps_at_goal)
 
     for attempt in range(num_attemps):
