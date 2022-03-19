@@ -42,8 +42,12 @@ def verify_type(data_name, dtype):
     assert DTYPES[mod_data_name] == dtype, f'{data_name}\'s np.array data type is {dtype}, but should be {DTYPES[mod_data_name]}'
 
 
+def check_action(a, act_lim):
+        assert (-act_lim <= a).all() and (a <= act_lim).all(), f'Action {a} has entries outside the [{-act_lim}, {act_lim}] range.'
+
+
 class MWDatasetWriter:
-    def __init__(self, fname, env, task_name, res, camera, success_steps_for_termination):
+    def __init__(self, fname, env, task_name, res, camera, act_tolerance, success_steps_for_termination):
         # The number of steps with with info/success = True required to trigger episode termination
         self.task_name = task_name
         self.success_steps_for_termination = success_steps_for_termination
@@ -56,10 +60,12 @@ class MWDatasetWriter:
             'img_height' : res[1],
             #'img_format' : 'cwh',
             'camera' : camera,
+            'act_tolerance' : act_tolerance,
             'subgoal_breakdown' : SUBGOAL_BREAKDOWN[task_name],
             'success_steps_for_termination' : success_steps_for_termination
         }
 
+        self._act_lim = 1 - act_tolerance
         self.metadata = np.void(pickle.dumps(raw_metadata))
         self._datafile = h5py.File(fname, 'w')
         self._datafile.create_dataset("env_metadata", data=self.metadata)
@@ -87,6 +93,7 @@ class MWDatasetWriter:
     def append_data(self, s, o, a, r, done, info):
         self.data['states'].append(s)
         self.data['observations'].append(o)
+        check_action(a, self._act_lim)
         self.data['actions'].append(a)
         self.data['rewards'].append(r)
         self.data['terminals'].append(done)
@@ -120,16 +127,19 @@ class MWDatasetWriter:
 def qlearning_dataset(dataset_path, reward_type):
     data = h5py.File(dataset_path, "r")
     env_metadata = pickle.loads(data['env_metadata'][()].tostring())
+    act_lim = 1 - env_metadata['act_tolerance']
 
     # Retrieve the subgoal info for the task whose data was loaded
     subgoals = ['infos/' + key for key in (SUBGOAL_BREAKDOWN[env_metadata["task_name"]] + ['goal'])]
-    if reward_type=='shaped':
+    if reward_type=='supgoal':
         subgoal_coeffs = np.asarray(SUBGOAL_REWARD_COEFFICIENTS[env_metadata["task_name"]])
         assert len(subgoals) == len(subgoal_coeffs), "The number of subgoals, including the goal, and subgoal coefficients must be the same"
     elif reward_type=='sparse':
         subgoal_coeffs_shaped = np.asarray(SUBGOAL_REWARD_COEFFICIENTS[env_metadata["task_name"]])
         subgoal_coeffs = np.zeros_like(subgoal_coeffs_shaped, dtype=np.float32)
         subgoal_coeffs[-1] = subgoal_coeffs_shaped.max()
+    elif reward_type=='shaped':
+        pass
     else:
         raise NotImplementedError
 
@@ -170,6 +180,7 @@ def qlearning_dataset(dataset_path, reward_type):
             obs = dataset['observations'][i]
             new_obs = dataset['observations'][i+1]
             action = dataset['actions'][i]
+            check_action(action, act_lim)
             subgoals_achieved = np.asarray([dataset[subgoal][i] for subgoal in subgoals], dtype=np.float32)
             #TODO: decide whether subgoal rewards should always be *summed*. E.g., what if one subgoal implies another?
             reward = np.dot(subgoal_coeffs, subgoals_achieved)
