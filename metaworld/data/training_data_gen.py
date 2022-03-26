@@ -2,6 +2,7 @@ import metaworld
 import random
 import cv2
 import os
+import sys
 from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
                             ALL_V2_ENVIRONMENTS_GOAL_HIDDEN)
 from metaworld.policies import *
@@ -9,6 +10,7 @@ from tests.metaworld.envs.mujoco.sawyer_xyz.test_scripted_policies import test_c
 from metaworld.data.dataset import *
 from datetime import datetime
 import gym
+import argparse
 
 # Suppress float conversion warnings 
 gym.logger.set_level(40)
@@ -50,97 +52,107 @@ def config_env(e):
     e._set_task_called = True
 
 
-res = (84, 84)
-camera = 'corner' # one of ['topview', 'corner', 'corner2', 'corner3', 'behindGripper', 'gripperPOV']
-MAX_steps_at_goal = 10
-act_tolerance = 1e-5
-lim = 1 - act_tolerance
+def gen_data(tasks, num_traj, res, camera):
+    res = (res, res)
+    #camera = 'corner' # one of ['topview', 'corner', 'corner2', 'corner3', 'behindGripper', 'gripperPOV']
+    MAX_steps_at_goal = 10
+    act_tolerance = 1e-5
+    lim = 1 - act_tolerance
 
-#print(metaworld.ML1.ENV_NAMES)  # Check out the available environments
+    #print(metaworld.ML1.ENV_NAMES)  # Check out the available environments
 
-target_tasks = ['assembly-v2']
-
-for case in test_cases_latest_nonoise:
-    
-    if case[0] not in target_tasks:
-        continue
-    
-    task_name = case[0]
-    policy = case[1]
-
-    print(f'----------Running task {task_name}------------')
-
-    """
-    # This uses a single goal distribution. For generating the training data, use ML1's training distrib instead.
-    task_full_name = task_name + '-goal-observable'
-    env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[task_full_name]()
-    #print(f'\nPROCESSING TASK***{task_full_name}***')
-    """
-
-    ml1 = metaworld.ML1(task_name) # Construct the benchmark, sampling tasks
-    env = ml1.train_classes[task_name]()  # Create a **training** goal distribution environment
-    """
-    task = random.choice(ml1.train_tasks)
-    env.set_task(task)  # Set task
-    config_env(env)
-    """
-    num_successes = 0
-    num_attemps = 300
-
-    print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
-
-    dt = datetime.now() 
-    #str_date_time = dt.strftime("%d-%m-%Y-%H:%M:%S")
-    #print(str_date_time)
-    data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '_' + str(num_attemps) + '-traj_' + dt.strftime("%d-%m-%Y-%H.%M.%S") + '.h5py')
-    data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, act_tolerance, MAX_steps_at_goal)
-
-    for attempt in range(num_attemps):
-        writer = writer_for(task_name + '-' + str(attempt + 1), env.metadata['video.frames_per_second'], res)
+    for case in test_cases_latest_nonoise:
         
+        if case[0] not in tasks: # target_tasks:
+            continue
+        
+        task_name = case[0]
+        policy = case[1]
+
+        print(f'----------Running task {task_name}------------')
+
+        """
+        # This uses a single goal distribution. For generating the training data, use ML1's training distrib instead.
+        task_full_name = task_name + '-goal-observable'
+        env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[task_full_name]()
+        #print(f'\nPROCESSING TASK***{task_full_name}***')
+        """
+
+        ml1 = metaworld.ML1(task_name) # Construct the benchmark, sampling tasks
+        env = ml1.train_classes[task_name]()  # Create a **training** goal distribution environment
+        """
         task = random.choice(ml1.train_tasks)
         env.set_task(task)  # Set task
         config_env(env)
-        
-        state = env.reset()
-        obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
-        writer.write(obs)
-        success_recorded =  False
-        
-        t = 0
+        """
+        num_successes = 0
 
-        for t in range(env.max_path_length):
-            action = policy.get_action(state)
-            # Clip the action
-            action = np.clip(action, -lim, lim)
-            new_state, reward, done, info = env.step(action)
-            data_writer.append_data(state, obs, action, reward, done, info)
-            #print(f"Step {t} |||| near-object-rew: {info['near_object']}, grasp-rew: {info['grasp_reward']}, grasp-succ: {info['grasp_success']}, lift-succ: {info['lift_success']}, align-succ: {info['align_success']}, in-place-rew: {info['in_place_reward']}, obj-to-target-rew: {info['obj_to_target']}, success: {info['success']}")
-            state = new_state
-            obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
-            #obs = env.sim.render(*res, mode='window', camera_name=camera)
-            writer.write(obs)
+        print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
+
+        dt = datetime.now() 
+        #str_date_time = dt.strftime("%d-%m-%Y-%H:%M:%S")
+        #print(str_date_time)
+        data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '_' + str(num_traj) + '-traj_' + dt.strftime("%d-%m-%Y-%H.%M.%S") + '.h5py')
+        data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, act_tolerance, MAX_steps_at_goal)
+
+        for attempt in range(num_traj):
+            writer = writer_for(task_name + '-' + str(attempt + 1), env.metadata['video.frames_per_second'], res)
             
-            # TODO: record fixed-length trajectories? Or only until success? 
+            task = random.choice(ml1.train_tasks)
+            env.set_task(task)  # Set task
+            config_env(env)
+            
+            state = env.reset()
+            obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
+            writer.write(obs)
+            success_recorded =  False
 
-            if info['success'] and steps_at_goal >= MAX_steps_at_goal:
-                print(f'Attempt {attempt + 1} succeeded at step {t}')
-                num_successes += 1
-                success_recorded = True
-                break
-            elif info['success']:
-                steps_at_goal += 1
-            else:
-                steps_at_goal = 0
+            for t in range(env.max_path_length):
+                action = policy.get_action(state)
+                # Clip the action
+                action = np.clip(action, -lim, lim)
+                new_state, reward, done, info = env.step(action)
+                data_writer.append_data(state, obs, action, reward, done, info)
 
-        if not success_recorded:
-            print(f'Attempt {attempt + 1} ended unsuccessfully at time step {t}')
+                strpr = f"Step {t} |||"
+                for k in info:
+                    strpr += f"{k}: {info[k]}, "
+                #print(strpr)
+                state = new_state
+                obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
+                #env.sim.render(*res, mode='window', camera_name=camera)
+                writer.write(obs)
+                
+                # TODO: record fixed-length trajectories? Or only until success? 
+                if info['success'] and steps_at_goal >= MAX_steps_at_goal:
+                    print(f'Attempt {attempt + 1} succeeded at step {t}')
+                    num_successes += 1
+                    success_recorded = True
+                    break
+                elif info['success']:
+                    steps_at_goal += 1
+                else:
+                    steps_at_goal = 0
 
-        data_writer.write_trajectory()
+            if not success_recorded:
+                print(f'Attempt {attempt + 1} ended unsuccessfully at time step {t}')
+
+            data_writer.write_trajectory()
+
+        data_writer.close()
+        print(f'Success rate for {task_name}: {num_successes / num_traj}\n')
+        
+        # Check the created dataset
+        qlearning_dataset(data_file_path, reward_type='subgoal')
 
 
-    data_writer.close()
-    print(f'Success rate for {task_name}: {num_successes / num_attemps}\n')
-    
-    # Check the created dataset
-    qlearning_dataset(data_file_path, reward_type='sparse')
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--tasks", type=str, nargs='+', help = "Tasks for which to generate trajectories from scripted policies")
+    parser.add_argument("-n", "--num_traj", type=int, help = "Number of trajectories to generate for each task")
+    parser.add_argument("-r", "--res", type=int, default=84, help = "Image resolution")
+    parser.add_argument("-c", "--camera", type=str, default='corner', help = "Camera. Possible values: 'corner', 'topview', 'corner2', 'corner3', 'behindGripper', 'gripperPOV' ")
+    args = parser.parse_args()
+    print(f'Generating {args.num_traj} trajectories for tasks {args.tasks} with video resolution {args.res}x{args.res} and {args.camera} camera view.')
+    gen_data(args.tasks, args.num_traj, args.res, args.camera)
