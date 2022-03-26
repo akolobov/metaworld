@@ -5,12 +5,14 @@ import time
 from flatten_dict import flatten
 
 SUBGOAL_REWARD_COEFFICIENTS = {
-    'assembly-v2' : [1, 5, 10, 30]
+    'assembly-v2' : [1, 5, 10, 30],
+    'button-press-v2' : [1, 5, 10, 30]
 }
 
 
 SUBGOAL_BREAKDOWN = {
-    'assembly-v2' : ['grasp_success', 'lift_success', 'align_success']
+    'assembly-v2' : ['grasp_success', 'lift_success', 'align_success'],
+    'button-press-v2' : ['nearby_success', 'near_button_success', 'button_pressed_success']
 }
 
 

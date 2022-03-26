@@ -52,6 +52,9 @@ class SawyerButtonPressEnvV2(SawyerXYZEnv):
         ) = self.compute_reward(action, obs)
 
         info = {
+            'nearby_success': float(tcp_to_obj <= 0.25),
+            'near_button_success': float(near_button >=0.50),
+            'button_pressed_success': float(button_pressed >= 0.2),
             'success': float(obj_to_target <= 0.02),
             'near_object': float(tcp_to_obj <= 0.05),
             'grasp_success': float(tcp_open > 0),
