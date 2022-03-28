@@ -78,13 +78,9 @@ def gen_data(tasks, num_traj, res, camera):
         #print(f'\nPROCESSING TASK***{task_full_name}***')
         """
 
-        ml1 = metaworld.ML1(task_name) # Construct the benchmark, sampling tasks
-        env = ml1.train_classes[task_name]()  # Create a **training** goal distribution environment
-        """
-        task = random.choice(ml1.train_tasks)
-        env.set_task(task)  # Set task
-        config_env(env)
-        """
+        # TODO: record fixed-length trajectories? Or only until success?
+        env = metaworld.mw_gym_make(task_name, sparse_reward=False, stop_at_goal=True, steps_at_goal=MAX_steps_at_goal)
+        
         num_successes = 0
 
         print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
@@ -97,15 +93,10 @@ def gen_data(tasks, num_traj, res, camera):
 
         for attempt in range(num_traj):
             writer = writer_for(task_name + '-' + str(attempt + 1), env.metadata['video.frames_per_second'], res)
-            
-            task = random.choice(ml1.train_tasks)
-            env.set_task(task)  # Set task
-            config_env(env)
-            
+
             state = env.reset()
             obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
             writer.write(obs)
-            success_recorded =  False
 
             for t in range(env.max_path_length):
                 action = policy.get_action(state)
@@ -123,19 +114,13 @@ def gen_data(tasks, num_traj, res, camera):
                 #env.sim.render(*res, mode='window', camera_name=camera)
                 writer.write(obs)
                 
-                # TODO: record fixed-length trajectories? Or only until success? 
-                if info['success'] and steps_at_goal >= MAX_steps_at_goal:
-                    print(f'Attempt {attempt + 1} succeeded at step {t}')
-                    num_successes += 1
-                    success_recorded = True
+                if done:
+                    if info['task_accomplished']:
+                        print(f'Attempt {attempt + 1} succeeded at step {t}')
+                        num_successes += 1
+                    else:
+                        print(f'Attempt {attempt + 1} ended unsuccessfully at time step {t}')
                     break
-                elif info['success']:
-                    steps_at_goal += 1
-                else:
-                    steps_at_goal = 0
-
-            if not success_recorded:
-                print(f'Attempt {attempt + 1} ended unsuccessfully at time step {t}')
 
             data_writer.write_trajectory()
 

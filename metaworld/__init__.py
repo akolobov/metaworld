@@ -36,27 +36,69 @@ class MetaWorldEnv:
 
 
 import gym
+class GoalDirected(gym.Wrapper):
+    def __init__(self, env, steps_at_goal):
+        super().__init__(env)
+        self._steps_at_goal = 0
+        self._max_steps_at_goal = steps_at_goal
+
+    def _check_accomplished(self, info):
+        assert 'success' in info, 'Invalid MetaWorld environment: \'success\' key is missing from the info.'
+        if info['success']:
+            self._steps_at_goal += 1
+            if self._steps_at_goal >= self._max_steps_at_goal:
+                info['task_accomplished'] = True
+            elif info['success']:
+                info['task_accomplished'] = False     
+        else:
+            self._steps_at_goal = 0
+            info['task_accomplished'] = False      
+
+    def reset(self):
+        self._steps_at_goal = 0
+        return super().reset()
+
+    def step(self, action):
+        observation, reward, done, info = super().step(action)
+        self._check_accomplished(info)
+        # 'done' may be set by self.env for many reasons. e.g., time horizon arrival. Never unset it.
+        if info['task_accomplished']:
+            done = True
+        return observation, reward, done, info
+
 class MWReset(gym.Wrapper):
     def __init__(self, env, train_tasks):
         super().__init__(env)
         self._train_tasks = train_tasks
+    
+    def _config_env(self):
+        self.env._partially_observable = False
+        self.env._freeze_rand_vec = False
+        self.env._set_task_called = True
 
     def reset(self):
         task = self._train_tasks[np.random.randint(len(self._train_tasks))]
         self.env.set_task(task)
+        # ASSUMPTION: env is a "native" (not wrapped) metaworld environment
+        self._config_env()
         return self.env.reset()
 
 class MWSparseReward(gym.Wrapper):
     def step(self, action):
         observation, reward, done, info = super().step(action)
-        if 'success' in info:
-            reward = info['success']
+        assert 'success' in info, 'Invalid MetaWorld environment: \'success\' key is missing from the info.'
+        reward = info['success']
         return observation, reward, done, info
 
-def wrap_mw_env(env, train_tasks, sparse_reward: bool):
-    # Wrap the environment to return done when time limit is reached and randomly sample a task variation at reset
-    env = gym.wrappers.TimeLimit(env, env.max_path_length)
+def wrap_mw_env(env, train_tasks, sparse_reward: bool, stop_at_goal: bool = False, steps_at_goal: int = 1):
+    # Wrap the environment to randomly sample a task variation at reset. 
+    #
+    # WARNING: **THIS MUST BE THE FIRST WRAPPER.**
     env = MWReset(env, train_tasks)
+    # Wrap the environment to return done when time limit.
+    env = gym.wrappers.TimeLimit(env, env.max_path_length)
+    if stop_at_goal:
+        env = GoalDirected(env, steps_at_goal)
     if sparse_reward:
         env = MWSparseReward(env)
     return env
@@ -90,11 +132,11 @@ class Benchmark(abc.ABC):
         """Get all of the test tasks for this benchmark."""
         return self._test_tasks
 
-    def create_train_env(self, env_name, sparse_reward=False):
-        return wrap_mw_env(self.train_classes[env_name](), self.train_tasks, sparse_reward)
+    def create_train_env(self, task_name, sparse_reward=False, stop_at_goal= False, steps_at_goal=1):
+        return wrap_mw_env(self.train_classes[task_name](), self.train_tasks, sparse_reward, stop_at_goal, steps_at_goal)
 
-    def create_test_env(self, env_name):
-        return wrap_mw_env(self.test_classes[env_name](), self.test_tasks, sparse_reward)
+    def create_test_env(self, task_name, sparse_reward=False, stop_at_goal= False, steps_at_goal=1):
+        return wrap_mw_env(self.test_classes[task_name](), self.test_tasks, sparse_reward, stop_at_goal, steps_at_goal)
 
 _ML_OVERRIDE = dict(partially_observable=True)
 _MT_OVERRIDE = dict(partially_observable=False)
@@ -244,3 +286,10 @@ class MT50(Benchmark):
         self._test_tasks = []
 
 __all__ = ["ML1", "MT1", "ML10", "MT10", "ML45", "MT50"]
+
+
+def mw_gym_make(task_name, sparse_reward=False, stop_at_goal=False, steps_at_goal=1):
+    ml1 = ML1(task_name) # Construct the benchmark, sampling tasks
+    env = ml1.create_train_env(task_name, sparse_reward=sparse_reward, stop_at_goal=stop_at_goal, steps_at_goal=steps_at_goal)
+    env.get_normalized_score = lambda x : x
+    return env

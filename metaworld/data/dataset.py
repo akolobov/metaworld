@@ -207,6 +207,7 @@ def qlearning_dataset(dataset_path, reward_type):
         have env_metadata['success_steps_for_termination'] near-duplicate timesteps at the end. Below, we'll get
         rid of all but 1 of them.
         """
+        """
         goal_reached = True
 
         for t in range(N - env_metadata['success_steps_for_termination'], N):
@@ -222,6 +223,7 @@ def qlearning_dataset(dataset_path, reward_type):
             reward_ = reward_[: -env_metadata['success_steps_for_termination'] + 1]
             done_ = done_[: -env_metadata['success_steps_for_termination'] + 1]
             done_[-1] = True
+        """
 
         all_states.extend(state_)
         all_next_states.extend(next_state_)
