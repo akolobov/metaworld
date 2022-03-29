@@ -49,10 +49,10 @@ class GoalDirected(gym.Wrapper):
             if self._steps_at_goal >= self._max_steps_at_goal:
                 info['task_accomplished'] = True
             elif info['success']:
-                info['task_accomplished'] = False     
+                info['task_accomplished'] = False
         else:
             self._steps_at_goal = 0
-            info['task_accomplished'] = False      
+            info['task_accomplished'] = False
 
     def reset(self):
         self._steps_at_goal = 0
