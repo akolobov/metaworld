@@ -4,6 +4,8 @@ import numpy as np
 import time
 from flatten_dict import flatten
 
+MAX_MW_REWARD = 10
+
 SUBGOAL_REWARD_COEFFICIENTS = {
     'assembly-v2' : [1, 5, 10, 30],
     'button-press-v2' : [1, 5, 10, 30]
@@ -185,10 +187,13 @@ def qlearning_dataset(dataset_path, reward_type):
             check_action(action, act_lim)
             #TODO: decide whether subgoal rewards should always be *summed*. E.g., what if one subgoal implies another?
             if reward_type=='shaped':
-                reward =  dataset['rewards'][i]
+                reward =  dataset['rewards'][i] - MAX_MW_REWARD
+                if dataset['infos/goal'][i]:
+                    reward = 0
             elif reward_type in ['sparse', 'subgoal']:
                 subgoals_achieved = np.asarray([dataset[subgoal][i] for subgoal in subgoals], dtype=np.float32)
-                reward = np.dot(subgoal_coeffs, subgoals_achieved)
+                # The "- np.max(subgoal_coeffs)" is to ensure that goal-state reward (which equals np.max(subgoal_coeffs)) is 0.
+                reward = np.dot(subgoal_coeffs, subgoals_achieved) - np.max(subgoal_coeffs)
             else:
                 raise NotImplementedError()
             done_bool = dataset['terminals'][i]
