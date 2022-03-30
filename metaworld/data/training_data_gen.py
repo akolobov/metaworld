@@ -52,7 +52,7 @@ def config_env(e):
     e._set_task_called = True
 
 
-def gen_data(tasks, num_traj, res, camera):
+def gen_data(tasks, num_traj, noise, res, camera):
     res = (res, res)
     #camera = 'corner' # one of ['topview', 'corner', 'corner2', 'corner3', 'behindGripper', 'gripperPOV']
     MAX_steps_at_goal = 10
@@ -80,7 +80,8 @@ def gen_data(tasks, num_traj, res, camera):
 
         # TODO: record fixed-length trajectories? Or only until success?
         env = metaworld.mw_gym_make(task_name, sparse_reward=False, stop_at_goal=True, steps_at_goal=MAX_steps_at_goal)
-        
+        action_space_ptp = env.action_space.high - env.action_space.low
+
         num_successes = 0
 
         print(f'Generating a video at {env.metadata["video.frames_per_second"]} fps')
@@ -88,7 +89,7 @@ def gen_data(tasks, num_traj, res, camera):
         dt = datetime.now() 
         #str_date_time = dt.strftime("%d-%m-%Y-%H:%M:%S")
         #print(str_date_time)
-        data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '_' + str(num_traj) + '-traj_' + dt.strftime("%d-%m-%Y-%H.%M.%S") + '.h5py')
+        data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '_' + str(num_traj) + '-noise_' + str(noise) + '-traj_' + dt.strftime("%d-%m-%Y-%H.%M.%S") + '.h5py')
         data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, act_tolerance, MAX_steps_at_goal)
 
         for attempt in range(num_traj):
@@ -100,6 +101,7 @@ def gen_data(tasks, num_traj, res, camera):
 
             for t in range(env.max_path_length):
                 action = policy.get_action(state)
+                action = np.random.normal(action, noise * action_space_ptp)
                 # Clip the action
                 action = np.clip(action, -lim, lim)
                 new_state, reward, done, info = env.step(action)
@@ -136,8 +138,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--tasks", type=str, nargs='+', help = "Tasks for which to generate trajectories from scripted policies")
     parser.add_argument("-n", "--num_traj", type=int, help = "Number of trajectories to generate for each task")
+    parser.add_argument("-p", "--noise", type=float, default=0, help = "Action noise as a fraction of the action space, e.g., 0.1")
     parser.add_argument("-r", "--res", type=int, default=84, help = "Image resolution")
     parser.add_argument("-c", "--camera", type=str, default='corner', help = "Camera. Possible values: 'corner', 'topview', 'corner2', 'corner3', 'behindGripper', 'gripperPOV' ")
     args = parser.parse_args()
-    print(f'Generating {args.num_traj} trajectories for tasks {args.tasks} with video resolution {args.res}x{args.res} and {args.camera} camera view.')
-    gen_data(args.tasks, args.num_traj, args.res, args.camera)
+    print(f'Generating {args.num_traj} trajectories with action noise {args.noise} for tasks {args.tasks} with video resolution {args.res}x{args.res} and {args.camera} camera view.')
+    gen_data(args.tasks, args.num_traj, args.noise, args.res, args.camera)
