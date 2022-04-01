@@ -100,7 +100,7 @@ def gen_data(tasks, num_traj, noise, res, camera):
             writer.write(obs)
 
             for t in range(env.max_path_length):
-                action = policy.get_action(state)
+                action = policy.get_action(state['full_state'])
                 action = np.random.normal(action, noise * action_space_ptp)
                 # Clip the action
                 action = np.clip(action, -lim, lim)
@@ -112,7 +112,7 @@ def gen_data(tasks, num_traj, noise, res, camera):
                     strpr += f"{k}: {info[k]}, "
                 #print(strpr)
                 state = new_state
-                obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
+                #obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
                 #env.sim.render(*res, mode='window', camera_name=camera)
                 writer.write(obs)
                 

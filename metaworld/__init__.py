@@ -83,6 +83,23 @@ class MWReset(gym.Wrapper):
         self._config_env()
         return self.env.reset()
 
+class MWImgObs(gym.Wrapper):
+    def __init__(self, env, cam_height=84, cam_width=84, cam_name='corner'):
+        self.env = env
+        super().__init__(env)
+        self._res = (cam_height, cam_width)
+        self._camera_name = cam_name
+
+    def step(self, action):
+        state, reward, done, info = self.env.step(action)
+        # Flip the offscreen-rendered image -- MuJoCo renders offscreen upside down for some reason.
+        img = None
+        if self._camera_name is not None:
+            img = self.env.sim.render(*self._res, mode='offscreen', camera_name=self._camera_name)[:,:,::-1]
+        # TODO: mask out privileged info from the full state. Only eef pose/state and goal info must be visible. 
+        obs = {'proprio_state' : state, 'full_state' : state,  'image' : img}
+        return obs, reward, done, info
+
 class MWSparseReward(gym.Wrapper):
     def step(self, action):
         observation, reward, done, info = super().step(action)
@@ -90,11 +107,12 @@ class MWSparseReward(gym.Wrapper):
         reward = info['success']
         return observation, reward, done, info
 
-def wrap_mw_env(env, train_tasks, sparse_reward: bool, stop_at_goal: bool = False, steps_at_goal: int = 1):
+def wrap_mw_env(env, train_tasks, sparse_reward: bool, stop_at_goal: bool = False, steps_at_goal: int = 1, cam_height=84, cam_width=84, cam_name=None):
     # Wrap the environment to randomly sample a task variation at reset. 
     #
     # WARNING: **THIS MUST BE THE FIRST WRAPPER.**
     env = MWReset(env, train_tasks)
+    env = MWImgObs(env, cam_height, cam_width, cam_name)
     # Wrap the environment to return done when time limit.
     env = gym.wrappers.TimeLimit(env, env.max_path_length)
     if stop_at_goal:
