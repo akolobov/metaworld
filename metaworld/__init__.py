@@ -90,14 +90,30 @@ class MWImgObs(gym.Wrapper):
         self._res = (cam_height, cam_width)
         self._camera_name = cam_name
 
-    def step(self, action):
-        state, reward, done, info = self.env.step(action)
-        # Flip the offscreen-rendered image -- MuJoCo renders offscreen upside down for some reason.
+    def _render(self):
         img = None
         if self._camera_name is not None:
             img = self.env.sim.render(*self._res, mode='offscreen', camera_name=self._camera_name)[:,:,::-1]
-        # TODO: mask out privileged info from the full state. Only eef pose/state and goal info must be visible. 
-        obs = {'proprio_state' : state, 'full_state' : state,  'image' : img}
+        return img
+
+    @staticmethod
+    def _construct_proprio(state):
+        return np.hstack((state[:4], state[18:22]))
+
+    def reset(self):
+        state = self.env.reset()
+        proprio_state = MWImgObs._construct_proprio(state)
+        img = self._render()
+        return {'proprio_state' : proprio_state, 'full_state' : state,  'image' : img}
+
+    def step(self, action):
+        state, reward, done, info = self.env.step(action)
+        # Flip the offscreen-rendered image -- MuJoCo renders offscreen upside down for some reason.
+        img = self._render()
+        # Generate the proprio state from the 39-D full state. A full state consists of 18-D current and prev states and a 3-D goal spec. 
+        # We need only the eef pose and closed state (4-D) of the current and prev. states plus the goal info, i.e., a 4+4+3 = 11-D vector.
+        proprio_state = MWImgObs._construct_proprio(state)
+        obs = {'proprio_state' : proprio_state, 'full_state' : state,  'image' : img}
         return obs, reward, done, info
 
 class MWSparseReward(gym.Wrapper):
@@ -150,11 +166,11 @@ class Benchmark(abc.ABC):
         """Get all of the test tasks for this benchmark."""
         return self._test_tasks
 
-    def create_train_env(self, task_name, sparse_reward=False, stop_at_goal= False, steps_at_goal=1):
-        return wrap_mw_env(self.train_classes[task_name](), self.train_tasks, sparse_reward, stop_at_goal, steps_at_goal)
+    def create_train_env(self, task_name, sparse_reward=False, stop_at_goal= False, steps_at_goal=1, cam_height=84, cam_width=84, cam_name='corner'):
+        return wrap_mw_env(self.train_classes[task_name](), self.train_tasks, sparse_reward, stop_at_goal, steps_at_goal, cam_height, cam_width, cam_name)
 
-    def create_test_env(self, task_name, sparse_reward=False, stop_at_goal= False, steps_at_goal=1):
-        return wrap_mw_env(self.test_classes[task_name](), self.test_tasks, sparse_reward, stop_at_goal, steps_at_goal)
+    def create_test_env(self, task_name, sparse_reward=False, stop_at_goal= False, steps_at_goal=1, cam_height=84, cam_width=84, cam_name='corner'):
+        return wrap_mw_env(self.test_classes[task_name](), self.test_tasks, sparse_reward, stop_at_goal, steps_at_goal, cam_height, cam_width, cam_name)
 
 _ML_OVERRIDE = dict(partially_observable=True)
 _MT_OVERRIDE = dict(partially_observable=False)
@@ -306,8 +322,8 @@ class MT50(Benchmark):
 __all__ = ["ML1", "MT1", "ML10", "MT10", "ML45", "MT50"]
 
 
-def mw_gym_make(task_name, sparse_reward=False, stop_at_goal=False, steps_at_goal=1):
+def mw_gym_make(task_name, sparse_reward=False, stop_at_goal=False, steps_at_goal=1, cam_height=84, cam_width=84, cam_name='corner'):
     ml1 = ML1(task_name) # Construct the benchmark, sampling tasks
-    env = ml1.create_train_env(task_name, sparse_reward=sparse_reward, stop_at_goal=stop_at_goal, steps_at_goal=steps_at_goal)
+    env = ml1.create_train_env(task_name, sparse_reward=sparse_reward, stop_at_goal=stop_at_goal, steps_at_goal=steps_at_goal, cam_height=cam_height, cam_width=cam_width, cam_name=cam_name)
     env.get_normalized_score = lambda x : x
     return env

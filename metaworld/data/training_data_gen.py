@@ -78,7 +78,6 @@ def gen_data(tasks, num_traj, noise, res, camera):
         #print(f'\nPROCESSING TASK***{task_full_name}***')
         """
 
-        # TODO: record fixed-length trajectories? Or only until success?
         env = metaworld.mw_gym_make(task_name, sparse_reward=False, stop_at_goal=True, steps_at_goal=MAX_steps_at_goal)
         action_space_ptp = env.action_space.high - env.action_space.low
 
@@ -89,15 +88,17 @@ def gen_data(tasks, num_traj, noise, res, camera):
         dt = datetime.now() 
         #str_date_time = dt.strftime("%d-%m-%Y-%H:%M:%S")
         #print(str_date_time)
-        data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '_' + str(num_traj) + '-noise_' + str(noise) + '-traj_' + dt.strftime("%d-%m-%Y-%H.%M.%S") + '.h5py')
+        height, width = res
+        data_file_path = os.path.join(os.environ['JAXRL2_DATA'], task_name + '-num-traj_' + str(num_traj) + '-noise_' + str(noise) + '-res_' + str(height) + '_' + str(width) + '-cam_' + camera + '_' + dt.strftime("%d-%m-%Y-%H.%M.%S") + '.h5py')
         data_writer = MWDatasetWriter(data_file_path, env, task_name, res, camera, act_tolerance, MAX_steps_at_goal)
 
         for attempt in range(num_traj):
             writer = writer_for(task_name + '-' + str(attempt + 1), env.metadata['video.frames_per_second'], res)
 
             state = env.reset()
-            obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
-            writer.write(obs)
+            # obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
+            # writer.write(obs)
+            writer.write(state['image'])
 
             for t in range(env.max_path_length):
                 action = policy.get_action(state['full_state'])
@@ -105,7 +106,7 @@ def gen_data(tasks, num_traj, noise, res, camera):
                 # Clip the action
                 action = np.clip(action, -lim, lim)
                 new_state, reward, done, info = env.step(action)
-                data_writer.append_data(state, obs, action, reward, done, info)
+                data_writer.append_data(state['full_state'], state['proprio_state'], state['image'], action, reward, done, info)
 
                 strpr = f"Step {t} |||"
                 for k in info:
@@ -114,7 +115,9 @@ def gen_data(tasks, num_traj, noise, res, camera):
                 state = new_state
                 #obs = env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
                 #env.sim.render(*res, mode='window', camera_name=camera)
-                writer.write(obs)
+                #writer.write(obs)
+                writer.write(state['image'])
+
                 
                 if done:
                     if info['task_accomplished']:

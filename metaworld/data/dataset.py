@@ -19,7 +19,8 @@ SUBGOAL_BREAKDOWN = {
 
 
 DTYPES = {
-    'states': np.float64,
+    'full_states': np.float64,
+    'proprio_states': np.float64,
     'observations': np.uint8,
     'actions': np.float64,
     'terminals': np.bool_,
@@ -80,7 +81,8 @@ class MWDatasetWriter:
 
     def _reset_data(self):
         data = {
-            'states': [],
+            'full_states': [],
+            'proprio_states': [],
             'observations': [],
             'actions': [],
             'terminals': [],
@@ -94,8 +96,9 @@ class MWDatasetWriter:
         return data
 
 
-    def append_data(self, s, o, a, r, done, info):
-        self.data['states'].append(s)
+    def append_data(self, f, p, o, a, r, done, info):
+        self.data['full_states'].append(f)
+        self.data['proprio_states'].append(p)
         self.data['observations'].append(o)
         check_action(a, self._act_lim)
         self.data['actions'].append(a)
@@ -147,8 +150,10 @@ def qlearning_dataset(dataset_path, reward_type):
     else:
         raise NotImplementedError
 
-    all_states = []
-    all_next_states = []
+    all_full_states = []
+    all_next_full_states = []
+    all_proprio_states = []
+    all_next_proprio_states = []
     all_obs = []
     all_next_obs = []
     all_actions = []
@@ -163,8 +168,10 @@ def qlearning_dataset(dataset_path, reward_type):
 
         print(f'Processing trajectory {traj}')
 
-        state_ = []
-        next_state_ = []
+        full_state_ = []
+        next_full_state_ = []
+        proprio_state_ = []
+        next_proprio_state_ = []
         obs_ = []
         next_obs_ = []
         action_ = []
@@ -178,9 +185,10 @@ def qlearning_dataset(dataset_path, reward_type):
                 verify_type(k, dataset[k][0].dtype)
 
         for i in range(N-1):
-            time_start_typecast = time.time()
-            state = dataset['states'][i]
-            new_state = dataset['states'][i+1]
+            full_state = dataset['full_states'][i]
+            new_full_state = dataset['full_states'][i+1]
+            proprio_state = dataset['proprio_states'][i]
+            new_proprio_state = dataset['proprio_states'][i+1]
             obs = dataset['observations'][i]
             new_obs = dataset['observations'][i+1]
             action = dataset['actions'][i]
@@ -198,8 +206,10 @@ def qlearning_dataset(dataset_path, reward_type):
                 raise NotImplementedError()
             done_bool = dataset['terminals'][i]
 
-            state_.append(state)
-            next_state_.append(new_state)
+            full_state_.append(full_state)
+            next_full_state_.append(new_full_state)
+            proprio_state_.append(proprio_state)
+            next_proprio_state_.append(new_proprio_state)
             obs_.append(obs)
             next_obs_.append(new_obs)
             action_.append(action)
@@ -220,8 +230,8 @@ def qlearning_dataset(dataset_path, reward_type):
                 goal_reached = False
 
         if goal_reached:
-            state_ = state_[: -env_metadata['success_steps_for_termination'] + 1]
-            next_state_ = next_state_[: -env_metadata['success_steps_for_termination'] + 1]
+            full_state_ = full_state_[: -env_metadata['success_steps_for_termination'] + 1]
+            next_full_state_ = next_full_state_[: -env_metadata['success_steps_for_termination'] + 1]
             obs_ = obs_[: -env_metadata['success_steps_for_termination'] + 1]
             next_obs_ = next_obs_[: -env_metadata['success_steps_for_termination'] + 1]
             action_ = action_[: -env_metadata['success_steps_for_termination'] + 1]
@@ -230,8 +240,10 @@ def qlearning_dataset(dataset_path, reward_type):
             done_[-1] = True
         """
 
-        all_states.extend(state_)
-        all_next_states.extend(next_state_)
+        all_full_states.extend(full_state_)
+        all_next_full_states.extend(next_full_state_)
+        all_proprio_states.extend(proprio_state_)
+        all_next_proprio_states.extend(next_proprio_state_)
         all_obs.extend(obs_)
         all_next_obs.extend(next_obs_)
         all_actions.extend(action_)
@@ -240,8 +252,10 @@ def qlearning_dataset(dataset_path, reward_type):
 
 
     return {
-        'states': np.array(all_states),
-        'next_states': np.array(all_next_states),
+        'states': np.array(all_full_states),
+        'next_states': np.array(all_next_full_states),
+        'proprio_states': np.array(all_proprio_states),
+        'next_proprio_states': np.array(all_next_proprio_states),
         'observations': np.array(all_obs),
         'next_observations': np.array(all_next_obs),
         'actions': np.array(all_actions),
