@@ -34,7 +34,6 @@ class MetaWorldEnv:
 
         """
 
-
 import gym
 class GoalDirected(gym.Wrapper):
     def __init__(self, env, steps_at_goal):
